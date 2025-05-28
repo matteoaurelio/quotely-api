@@ -6,12 +6,19 @@ import os
 
 app = FastAPI()
 
+
+
 def delete_file_after_send(path: str):
     try:
         os.remove(path)
         print(f"Deleted: {path}")
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
+
+
+@app.get("/")
+def root():
+    return {"status": "Quotely API is running"}
 
 @app.post("/generate-csv")
 async def generate_csv(request: Request, background_tasks: BackgroundTasks):
