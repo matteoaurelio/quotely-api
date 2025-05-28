@@ -5,6 +5,7 @@ import uuid
 import os
 import asyncio
 import io
+from fastapi import HTTPException
 
 app = FastAPI()
 
@@ -22,7 +23,7 @@ async def delete_file_after_send(path: str):
         print(f"Error deleting file {path}: {e}")
 
 @app.post("/generate-csv")
-async def generate_csv(request: Request, background_tasks: BackgroundTasks):
+async def generate_csv(request: Request):
     try:
         data = await request.json()
         quotes = data.get("quotes", [])
@@ -32,19 +33,33 @@ async def generate_csv(request: Request, background_tasks: BackgroundTasks):
 
         df = pd.DataFrame(quotes)
 
-        # Write to Render's ephemeral /tmp directory
-        filename = f"quotes_{uuid.uuid4().hex}.csv"
+        # Set fixed filename
+        filename = "quotes.csv"
         path = f"/tmp/{filename}"
+
+        # Save file
         df.to_csv(path, index=False)
 
-        # Clean up after 2 minutes
-        background_tasks.add_task(delete_file_after_send, path)
-
-        return FileResponse(
-            path,
-            media_type="text/csv",
-            filename=filename
-        )
+        # Return download link
+        return {
+            "message": "Your file is ready.",
+            "download_url": f"https://quotely-api.onrender.com/files/{filename}"
+        }
 
     except Exception as e:
         return {"error": str(e)}
+    
+
+
+@app.get("/files/{filename}")
+async def get_file(filename: str):
+    path = f"/tmp/{filename}"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        path,
+        media_type="text/csv",
+        filename=filename
+    )
+
