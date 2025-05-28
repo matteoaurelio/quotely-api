@@ -4,6 +4,7 @@ import pandas as pd
 import uuid
 import os
 import asyncio
+import io
 
 app = FastAPI()
 
@@ -24,26 +25,23 @@ def root():
 
 @app.post("/generate-csv")
 async def generate_csv(request: Request):
-    # Step 1: Receive the incoming JSON
     data = await request.json()
     quotes = data.get("quotes", [])
 
     if not quotes:
         return {"error": "No quotes provided"}
 
-    # Step 2: Convert to DataFrame
     df = pd.DataFrame(quotes)
 
-    # Step 3: Convert DataFrame to CSV in memory
-    buffer = io.StringIO()
-    df.to_csv(buffer, index=False)
-    buffer.seek(0)
+    # Write CSV to byte stream
+    string_buffer = io.StringIO()
+    df.to_csv(string_buffer, index=False)
+    byte_buffer = io.BytesIO(string_buffer.getvalue().encode("utf-8"))
+    byte_buffer.seek(0)
 
-    # Step 4: Stream the CSV directly
-    filename = f"quotes_{uuid.uuid4().hex}.csv"
     return StreamingResponse(
-        buffer,
+        byte_buffer,
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": "attachment; filename=quotes.csv"}
     )
 
