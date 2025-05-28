@@ -3,13 +3,15 @@ from fastapi.responses import FileResponse
 import pandas as pd
 import uuid
 import os
+import asyncio
 
 app = FastAPI()
 
 
 
-def delete_file_after_send(path: str):
+async def delete_file_after_send(path: str):
     try:
+        await asyncio.sleep(120)  # Wait for 2 minutes before deleting
         os.remove(path)
         print(f"Deleted: {path}")
     except Exception as e:
@@ -34,13 +36,16 @@ async def generate_csv(request: Request, background_tasks: BackgroundTasks):
 
     # Step 3: Save to unique filename
     filename = f"quotes_{uuid.uuid4().hex}.csv"
-    df.to_csv(filename, index=False)
+    path = f"./{filename}"
+    df.to_csv(path, index=False)
 
-    background_tasks.add_task(delete_file_after_send, filename)
+    # Step 4: Schedule deletion after 2 min
+    background_tasks.add_task(delete_file_after_send, path)
 
-    # Step 4: Return the file as a download
-    response = FileResponse(filename, media_type="text/csv", filename=filename)
-
-    return response
-
+    # Step 5: Return file for direct download
+    return FileResponse(
+        path,
+        media_type="text/csv",
+        filename=filename
+    )
 
