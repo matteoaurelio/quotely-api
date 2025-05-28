@@ -8,6 +8,9 @@ import io
 
 app = FastAPI()
 
+@app.get("/")
+def root():
+    return {"status": "Quotely API is running"}
 
 
 async def delete_file_after_send(path: str):
@@ -18,30 +21,30 @@ async def delete_file_after_send(path: str):
     except Exception as e:
         print(f"Error deleting file {path}: {e}")
 
-
-@app.get("/")
-def root():
-    return {"status": "Quotely API is running"}
-
 @app.post("/generate-csv")
-async def generate_csv(request: Request):
-    data = await request.json()
-    quotes = data.get("quotes", [])
+async def generate_csv(request: Request, background_tasks: BackgroundTasks):
+    try:
+        data = await request.json()
+        quotes = data.get("quotes", [])
 
-    if not quotes:
-        return {"error": "No quotes provided"}
+        if not quotes:
+            return {"error": "No quotes provided"}
 
-    df = pd.DataFrame(quotes)
+        df = pd.DataFrame(quotes)
 
-    # Write CSV to byte stream
-    string_buffer = io.StringIO()
-    df.to_csv(string_buffer, index=False)
-    byte_buffer = io.BytesIO(string_buffer.getvalue().encode("utf-8"))
-    byte_buffer.seek(0)
+        # Write to Render's ephemeral /tmp directory
+        filename = f"quotes_{uuid.uuid4().hex}.csv"
+        path = f"/tmp/{filename}"
+        df.to_csv(path, index=False)
 
-    return StreamingResponse(
-        byte_buffer,
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=quotes.csv"}
-    )
+        # Clean up after 2 minutes
+        background_tasks.add_task(delete_file_after_send, path)
 
+        return FileResponse(
+            path,
+            media_type="text/csv",
+            filename=filename
+        )
+
+    except Exception as e:
+        return {"error": str(e)}
