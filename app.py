@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 import pandas as pd
 import uuid
 import os
@@ -23,29 +23,27 @@ def root():
     return {"status": "Quotely API is running"}
 
 @app.post("/generate-csv")
-async def generate_csv(request: Request, background_tasks: BackgroundTasks):
+async def generate_csv(request: Request):
     # Step 1: Receive the incoming JSON
     data = await request.json()
     quotes = data.get("quotes", [])
 
     if not quotes:
         return {"error": "No quotes provided"}
-    
+
     # Step 2: Convert to DataFrame
     df = pd.DataFrame(quotes)
 
-    # Step 3: Save to unique filename
+    # Step 3: Convert DataFrame to CSV in memory
+    buffer = io.StringIO()
+    df.to_csv(buffer, index=False)
+    buffer.seek(0)
+
+    # Step 4: Stream the CSV directly
     filename = f"quotes_{uuid.uuid4().hex}.csv"
-    path = f"./{filename}"
-    df.to_csv(path, index=False)
-
-    # Step 4: Schedule deletion after 2 min
-    background_tasks.add_task(delete_file_after_send, path)
-
-    # Step 5: Return file for direct download
-    return FileResponse(
-        path,
+    return StreamingResponse(
+        buffer,
         media_type="text/csv",
-        filename=filename
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
